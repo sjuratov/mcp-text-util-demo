@@ -95,6 +95,59 @@ curl -X POST "http://localhost:8000/messages/?session_id=<id>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
+### Use MCP Inspector (local and remote)
+
+The [MCP Inspector](https://github.com/modelcontextprotocol/inspector) is useful for interactively testing server capabilities, tools, and requests.
+
+Install/run Inspector with `npx`:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+By default, Inspector opens a local web UI (usually `http://127.0.0.1:6274`).
+
+#### Connect to local server (stdio)
+
+1. Start the server in stdio mode:
+
+```bash
+uv run python -m server
+```
+
+2. In MCP Inspector, choose transport `stdio`.
+3. Set command to `uv`.
+4. Set args to:
+
+```text
+run --project /path/to/mcp-text-util-demo python -m server
+```
+
+5. Click **Connect**, then run `tools/list` and invoke tools such as `generate_uuid` or `hash_text`.
+
+#### Connect to remote/local HTTP server (SSE)
+
+1. Start this server in SSE mode (or use your deployed endpoint):
+
+```bash
+MCP_TRANSPORT=sse uv run python -m server
+```
+
+2. In MCP Inspector, choose transport `sse`.
+3. Set URL to:
+
+```text
+http://localhost:8000/sse
+```
+
+4. If the endpoint is protected (for example Azure EasyAuth), add an `Authorization` header:
+
+```text
+Authorization: Bearer <token>
+```
+
+5. Click **Connect**, then test `tools/list` and tool calls from the Inspector UI.
+
 ## Deploy to Azure
 
 This project uses [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/) for one-command provisioning and deployment. The container image is built remotely by Azure Container Registry (no local Docker required).
