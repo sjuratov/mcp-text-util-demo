@@ -1,0 +1,20 @@
+# Python caches and virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+client/.env
+.azure/
+
+# Tooling and local artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+.vscode/

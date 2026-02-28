@@ -1,0 +1,13 @@
+{
+  "analysisServicesServers": "as",
+  "apiManagementService": "apim-",
+  "appConfigurationStores": "appcs-",
+  "appManagedEnvironments": "cae-",
+  "appContainerApps": "ca-",
+  "containerRegistryRegistries": "cr",
+  "insightsComponents": "appi-",
+  "managedIdentityUserAssignedIdentities": "id-",
+  "operationalInsightsWorkspaces": "log-",
+  "portalDashboards": "dash-",
+  "resourcesResourceGroups": "rg-"
+}

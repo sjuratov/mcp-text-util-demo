@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: a2a-text-utilities
+
+hooks:
+  postprovision:
+    posix:
+      shell: sh
+      run: ./infra/scripts/postprovision.sh
+    windows:
+      shell: pwsh
+      run: ./infra/scripts/postprovision.ps1
