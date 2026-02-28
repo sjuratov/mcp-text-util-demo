@@ -50,7 +50,7 @@ module containerApps 'br/public:avm/ptn/azd/container-apps-stack:0.1.0' = {
   }
 }
 
-// Managed identity for the agent container app (used for ACR pull)
+// Managed identity for the MCP server container app (used for ACR pull)
 module agentIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
   name: 'agent-identity'
   scope: rg
@@ -60,7 +60,7 @@ module agentIdentity 'br/public:avm/res/managed-identity/user-assigned-identity:
   }
 }
 
-// Container App: the A2A Text Utilities Agent
+// Container App: the MCP Text Utilities Server
 module agent 'br/public:avm/ptn/azd/acr-container-app:0.2.0' = {
   name: 'agent-container-app'
   scope: rg
@@ -86,6 +86,10 @@ module agent 'br/public:avm/ptn/azd/acr-container-app:0.2.0' = {
       {
         name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
         value: monitoring.outputs.applicationInsightsConnectionString
+      }
+      {
+        name: 'MCP_TRANSPORT'
+        value: 'sse'
       }
     ]
   }
