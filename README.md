@@ -27,6 +27,11 @@ A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
   - [Configure MCP clients (Claude and VS Code)](#configure-mcp-clients-claude-and-vs-code)
     - [Local stdio configuration](#local-stdio-configuration)
     - [Remote Azure SSE configuration (EasyAuth)](#remote-azure-sse-configuration-easyauth)
+  - [Configure Copilot Studio connector](#configure-copilot-studio-connector)
+    - [Step 1: Deploy to Azure](#step-1-deploy-to-azure)
+    - [Step 2: Create connector app registration](#step-2-create-connector-app-registration)
+    - [Step 3: Update EasyAuth to allow the connector app](#step-3-update-easyauth-to-allow-the-connector-app)
+    - [Step 4: Configure the connector in Copilot Studio](#step-4-configure-the-connector-in-copilot-studio)
   - [Tools](#tools)
   - [Environment Variables](#environment-variables)
   - [Project Structure](#project-structure)
@@ -462,6 +467,103 @@ Then paste it in Inspector as:
 ```text
 Authorization: Bearer eyJ...
 ```
+
+## Configure Copilot Studio connector
+
+To use this MCP server from a Copilot Studio custom connector with OAuth (EasyAuth), follow these steps **in order**.
+
+### Step 1: Deploy to Azure
+
+Run `azd up` to provision all resources and configure EasyAuth:
+
+```bash
+azd up
+```
+
+### Step 2: Create connector app registration
+
+Run the helper script to create an Entra app registration for the connector and output all OAuth values:
+
+```bash
+./get-connector-oauth-values.sh --connector-app-name "Text Utilities Copilot Connector"
+```
+
+This will:
+- Create (or reuse) an Entra app registration for the connector.
+- Add the delegated `access_as_user` permission and grant admin consent.
+- Create a client secret.
+- Save `ENTRA_CONNECTOR_APP_CLIENT_ID` to your azd environment.
+- Print all values needed for the connector form.
+
+### Step 3: Update EasyAuth to allow the connector app
+
+EasyAuth restricts which client applications can obtain tokens. After creating the connector app, re-run provisioning so `postprovision.sh` picks up the new connector app ID:
+
+```bash
+azd up
+```
+
+> **Why a second `azd up`?** The connector app doesn't exist during the first deploy. The `postprovision.sh` script reads `ENTRA_CONNECTOR_APP_CLIENT_ID` from the azd environment and adds it to the EasyAuth `allowedApplications` list. Without this step, EasyAuth returns `403` to tokens issued to the connector app.
+
+### Step 4: Configure the connector in Copilot Studio
+
+1. In your Copilot Studio custom connector, import this Swagger (update `host` if using APIM):
+
+```yaml
+swagger: '2.0'
+info:
+  title: Text-Utils
+  description: Various text utils - Base64 encode/decode
+  version: 1.0.0
+host: <your-container-app-domain>
+basePath: /
+schemes:
+  - https
+paths:
+  /mcp:
+    post:
+      operationId: InvokeServer
+      summary: Text-Utils
+      description: Various text utils - Base64 encode/decode
+      x-ms-agentic-protocol: mcp-streamable-1.0
+      responses:
+        '200':
+          description: Immediate Response
+      security:
+        - oauth2-auth:
+            - api://<ENTRA_API_APP_CLIENT_ID>/access_as_user
+securityDefinitions:
+  oauth2-auth:
+    type: oauth2
+    flow: accessCode
+    authorizationUrl: https://login.microsoftonline.com/<AZURE_TENANT_ID>/oauth2/v2.0/authorize
+    tokenUrl: https://login.microsoftonline.com/<AZURE_TENANT_ID>/oauth2/v2.0/token
+    scopes:
+      api://<ENTRA_API_APP_CLIENT_ID>/access_as_user: Access Text Utils API
+security:
+  - oauth2-auth:
+      - api://<ENTRA_API_APP_CLIENT_ID>/access_as_user
+```
+
+2. In the connector **Security** page, set:
+   - **Client ID**: from script output
+   - **Client secret**: from script output
+   - **Resource URL**: `api://<ENTRA_API_APP_CLIENT_ID>`
+   - **Tenant ID**: your tenant GUID (not `common`)
+
+3. Click **Update connector**.
+
+4. The connector generates a **Redirect URL**. Copy it and rerun the script to register it:
+
+```bash
+./get-connector-oauth-values.sh \
+  --connector-app-name "Text Utilities Copilot Connector" \
+  --redirect-uri "<paste-redirect-url-here>"
+```
+
+5. Update the **Client secret** in the connector with the newly printed value, then click **Update connector** again.
+
+6. Delete any existing connections and create a new one (sign in when prompted).
 
 ## Tools
 

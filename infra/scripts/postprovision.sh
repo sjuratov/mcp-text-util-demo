@@ -45,6 +45,15 @@ azd env set ENTRA_CLIENT_APP_CLIENT_ID "${CLIENT_APP_ID}"
 azd env set ENTRA_APP_CLIENT_ID "${API_APP_ID}"
 azd env set AZURE_TENANT_ID "${TENANT_ID}"
 
+# Build allowedApplications list: always include CLI client app,
+# optionally include Copilot Studio connector app if configured.
+ALLOWED_APPS="\"${CLIENT_APP_ID}\""
+CONNECTOR_APP_ID="${ENTRA_CONNECTOR_APP_CLIENT_ID:-}"
+if [ -n "${CONNECTOR_APP_ID}" ]; then
+  ALLOWED_APPS="${ALLOWED_APPS},\"${CONNECTOR_APP_ID}\""
+  echo "Including Copilot Studio connector app in EasyAuth: ${CONNECTOR_APP_ID}"
+fi
+
 echo "Configuring EasyAuth on container app: ${SERVICE_AGENT_NAME}"
 az containerapp auth microsoft update \
   --name "${SERVICE_AGENT_NAME}" \
@@ -54,7 +63,7 @@ az containerapp auth microsoft update \
   --allowed-audiences "${API_APP_ID}"
 AUTH_URL="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.App/containerApps/${SERVICE_AGENT_NAME}/authConfigs/current?api-version=2024-03-01"
 AUTH_BODY=$(cat <<JSON
-{"properties":{"platform":{"enabled":true},"globalValidation":{"unauthenticatedClientAction":"Return401"},"identityProviders":{"azureActiveDirectory":{"isAutoProvisioned":false,"registration":{"clientId":"${API_APP_ID}","openIdIssuer":"https://login.microsoftonline.com/${TENANT_ID}/v2.0"},"validation":{"allowedAudiences":["${API_APP_ID}","api://${API_APP_ID}"],"defaultAuthorizationPolicy":{"allowedApplications":["${CLIENT_APP_ID}"]}}}},"login":{"preserveUrlFragmentsForLogins":false},"encryptionSettings":{}}}
+{"properties":{"platform":{"enabled":true},"globalValidation":{"unauthenticatedClientAction":"Return401"},"identityProviders":{"azureActiveDirectory":{"isAutoProvisioned":false,"registration":{"clientId":"${API_APP_ID}","openIdIssuer":"https://login.microsoftonline.com/${TENANT_ID}/v2.0"},"validation":{"allowedAudiences":["${API_APP_ID}","api://${API_APP_ID}"],"defaultAuthorizationPolicy":{"allowedApplications":[${ALLOWED_APPS}]}}}},"login":{"preserveUrlFragmentsForLogins":false},"encryptionSettings":{}}}
 JSON
 )
 az rest --method PUT --url "${AUTH_URL}" --headers "Content-Type=application/json" --body "${AUTH_BODY}" >/dev/null
