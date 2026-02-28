@@ -1,16 +1,16 @@
-# A2A Text Utilities Agent
+# MCP Text Utilities Server
 
-A lightweight [A2A (Agent-to-Agent)](https://google.github.io/A2A/) demo agent providing text utility skills. Designed for Azure deployment with minimal cost — no LLM calls, pure Python.
+A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server providing text utility tools. Designed for Azure deployment with minimal cost — no LLM calls, pure Python.
 
-## Skills
+## Tools
 
-| Skill | Description | Example |
-|-------|-------------|---------|
-| **Generate UUID** | Creates a new UUID v4 | `generate a uuid` |
-| **Hash Text** | SHA-256 hash | `hash: hello world` |
-| **Base64 Encode** | Base64-encode text | `base64 encode: hello` |
-| **Base64 Decode** | Base64-decode text | `base64 decode: aGVsbG8=` |
-| **Word Count** | Count words & characters | `word count: some text here` |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| **generate_uuid** | Generates a new UUID v4 | _(none)_ |
+| **hash_text** | SHA-256 hash of text | `text: str` |
+| **base64_encode** | Base64-encode text | `text: str` |
+| **base64_decode** | Base64-decode text | `text: str` |
+| **word_count** | Count words & characters | `text: str` |
 
 ## Prerequisites
 
@@ -25,67 +25,74 @@ A lightweight [A2A (Agent-to-Agent)](https://google.github.io/A2A/) demo agent p
 uv sync
 ```
 
-### Run the A2A server
+### Run locally (stdio transport)
+
+The default transport is `stdio`, which is the standard way to connect MCP clients (Claude Desktop, VS Code Copilot, Cursor, etc.) to the server.
 
 ```bash
 uv run python -m server
 ```
 
-The server starts at `http://localhost:8000`. The agent card is available at:
-- `GET /.well-known/agent-card.json`
+The server reads JSON-RPC messages from stdin and writes responses to stdout.
 
-The card URL field is sourced from `AGENT_PUBLIC_BASE_URL` (defaults to `http://localhost:8000`), so cloud deployments can advertise the public HTTPS endpoint.
-For Copilot Studio browser-based discovery, CORS allows `https://copilotstudio.microsoft.com` and `https://copilotstudio.preview.microsoft.com` by default (override with `CORS_ALLOW_ORIGINS`).
+### Configure an MCP client
 
-### Run the CLI client
+**Claude Desktop** — add to `~/.config/claude/claude_desktop_config.json` (macOS/Linux) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
-The client supports **LLM-based intent detection** via Azure OpenAI so users can type natural language instead of structured commands. Configure it by copying the example `.env`:
-
-```bash
-cp client/.env.example client/.env
+```json
+{
+  "mcpServers": {
+    "text-utilities": {
+      "command": "uv",
+      "args": ["run", "--project", "/path/to/mcp-text-util-demo", "python", "-m", "server"]
+    }
+  }
+}
 ```
 
-Edit `client/.env` with your Azure OpenAI settings:
+**VS Code** — add to `.vscode/mcp.json` in your workspace:
 
-```env
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
-AZURE_OPENAI_MODEL=gpt-4o-mini
-AZURE_OPENAI_API_VERSION=2024-12-01-preview
-A2A_AGENT_URL=http://localhost:8000
-# For Azure EasyAuth-protected endpoint:
-# A2A_AGENT_API_APP_ID=<api app id>
-# A2A_AGENT_CLIENT_APP_ID=<client app id>
-# AZURE_TENANT_ID=<tenant id>
+```json
+{
+  "servers": {
+    "text-utilities": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--project", "/path/to/mcp-text-util-demo", "python", "-m", "server"]
+    }
+  }
+}
 ```
 
-Client auth behavior:
-- **Local server (`localhost`)**: no token is sent
-- **Azure EasyAuth endpoint**: token is acquired via Entra ID (`InteractiveBrowserCredential`) when `A2A_AGENT_API_APP_ID` is set
+### Run as HTTP server (SSE transport)
 
-> **Without `.env`**: intent detection is disabled and messages are sent as-is (keyword matching still works).
-
-In a second terminal:
+For remote or containerized deployments, use the SSE (Server-Sent Events) HTTP transport:
 
 ```bash
-uv run python -m client
+MCP_TRANSPORT=sse uv run python -m server
 ```
 
-Or connect to a remote agent:
+The server starts at `http://localhost:8000` with:
+- `GET /sse` — SSE connection endpoint (MCP clients connect here)
+- `POST /messages/` — message posting endpoint
+
+Override host/port via environment variables:
 
 ```bash
-uv run python -m client http://your-agent-url:8000
+HOST=0.0.0.0 PORT=8000 MCP_TRANSPORT=sse uv run python -m server
 ```
 
 ### Test with curl
 
 ```bash
-# Get agent card
-curl http://localhost:8000/.well-known/agent-card.json
+# Connect to SSE endpoint (keep this open in one terminal)
+curl -N http://localhost:8000/sse
 
-# Send a message
-curl -X POST http://localhost:8000/ \
+# In the response you'll see: event: endpoint / data: /messages/?session_id=<id>
+# Use that session_id to send a tools/list request
+curl -X POST "http://localhost:8000/messages/?session_id=<id>" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{"role":"user","parts":[{"kind":"text","text":"generate a uuid"}],"messageId":"test-1"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
 ## Deploy to Azure
@@ -109,7 +116,7 @@ azd up
 2. **Configure authentication** (two Entra app registrations: API app + client app, EasyAuth on Container App)
 3. **Store auth outputs** in `.azure/<env>/.env` (`ENTRA_API_APP_CLIENT_ID`, `ENTRA_CLIENT_APP_CLIENT_ID`, `AZURE_TENANT_ID`)
 4. **Build** the Docker image remotely via ACR Tasks
-5. **Deploy** the container app with the built image
+5. **Deploy** the container app with `MCP_TRANSPORT=sse` for HTTP access
 
 ### What gets created
 
@@ -120,47 +127,40 @@ azd up
 | Application Insights | — | Observability (traces, requests, errors) | Free tier |
 | Container Registry | Basic | Stores Docker images (ACR build) | ~$5/month |
 | Container Apps Environment | Consumption | Hosting runtime | Free (scales to zero) |
-| Container App | 0.25 vCPU / 0.5 Gi | The A2A agent (0→1 replicas) | Free at demo volume |
+| Container App | 0.25 vCPU / 0.5 Gi | The MCP server (0→1 replicas) | Free at demo volume |
+
+### Connect a remote MCP client to Azure
+
+After `azd up`, the `SERVICE_AGENT_URI` output contains the public URL (e.g. `https://ca-agent-xxxx.azurecontainerapps.io`).
+
+**VS Code** — add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "text-utilities-azure": {
+      "type": "sse",
+      "url": "https://ca-agent-xxxx.azurecontainerapps.io/sse",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+  }
+}
+```
+
+To acquire a token for the EasyAuth-protected endpoint:
+
+```bash
+az account get-access-token --resource api://<ENTRA_API_APP_CLIENT_ID> --query accessToken -o tsv
+```
 
 ### Observability
 
-The agent sends OpenTelemetry events to Application Insights automatically. After deploying, open the Application Insights resource in Azure Portal to see:
+The server sends OpenTelemetry events to Application Insights automatically when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (injected by the Container App environment). After deploying, open the Application Insights resource in Azure Portal to see:
 - **Live Metrics** — real-time request stream
-- **Transaction search** — individual A2A requests
+- **Transaction search** — individual MCP requests
 - **Application Map** — dependency visualization
-
-### Publish via APIM
-
-1. Import the Container App endpoint into API Management
-2. Set the backend URL to the Container App's FQDN
-3. Add an API operation for `POST /` (JSON-RPC endpoint)
-4. Add an API operation for `GET /.well-known/agent-card.json` (agent discovery)
-
-## EasyAuth + Client configuration
-
-After `azd up`, copy these values from `.azure/<env>/.env` into `client/.env`:
-- `A2A_AGENT_URL=$SERVICE_AGENT_URI`
-- `A2A_AGENT_API_APP_ID=$ENTRA_API_APP_CLIENT_ID`
-- `A2A_AGENT_CLIENT_APP_ID=$ENTRA_CLIENT_APP_CLIENT_ID`
-- `AZURE_TENANT_ID=$AZURE_TENANT_ID`
-
-> `ENTRA_APP_CLIENT_ID` is kept for backward compatibility; prefer `ENTRA_API_APP_CLIENT_ID`.
->
-> EasyAuth is configured to keep the JSON-RPC endpoint protected while allowing anonymous access to `GET /.well-known/agent-card.json` for agent discovery tools (for example Copilot Studio).
-
-### Copilot Studio Agent2Agent OAuth form
-
-Use the helper script to create/update a dedicated Copilot Studio client app registration and print copy/paste values for the OAuth form:
-
-```bash
-./copilot-studio-config.sh --env <your-azd-env>
-```
-
-When Copilot Studio shows the generated Redirect URL, run:
-
-```bash
-./copilot-studio-config.sh --env <your-azd-env> --redirect-uri "<redirect-url>" --skip-secret-reset
-```
 
 ### Tear down
 
@@ -172,7 +172,15 @@ azd down
 
 - **Azure Container Apps (Consumption):** Scales to zero — free when idle. Free tier: 2M requests/month, 180K vCPU-seconds.
 - **No LLM/AI service costs** — all logic is pure Python.
-- **APIM (Consumption tier):** First 1M calls/month free.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` (local) or `sse` (HTTP) |
+| `HOST` | `0.0.0.0` | Bind host (HTTP mode only) |
+| `PORT` | `8000` | Bind port (HTTP mode only) |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | _(unset)_ | Enables Azure Monitor telemetry |
 
 ## Project Structure
 
@@ -185,14 +193,8 @@ azd down
 │   ├── abbreviations.json
 │   └── scripts/         # postprovision hooks (Entra apps, EasyAuth, ACR build/deploy)
 ├── server/
-│   ├── __main__.py      # Server entry point (uvicorn + OpenTelemetry)
-│   ├── agent.py         # AgentExecutor implementation
-│   └── skills.py        # Skill functions & routing
-├── client/
-│   ├── __main__.py      # Interactive CLI client
-│   ├── intent.py        # Azure OpenAI intent detection
-│   ├── .env.example     # Example configuration
-│   └── .env             # Your local config (git-ignored)
+│   ├── __main__.py      # MCP server entry point (FastMCP + OpenTelemetry)
+│   └── skills.py        # Tool implementation functions
 ├── Dockerfile           # Container image (built by ACR)
 └── README.md
 ```
