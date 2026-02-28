@@ -11,7 +11,6 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Copy application code
 COPY README.md ./
 COPY server/ server/
-COPY client/ client/
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
