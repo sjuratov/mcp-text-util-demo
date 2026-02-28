@@ -157,7 +157,12 @@ azd up
 2. **Configure authentication** (two Entra app registrations: API app + client app, EasyAuth on Container App)
 3. **Store auth outputs** in `.azure/<env>/.env` (`ENTRA_API_APP_CLIENT_ID`, `ENTRA_CLIENT_APP_CLIENT_ID`, `AZURE_TENANT_ID`)
 4. **Build** the Docker image remotely via ACR Tasks
-5. **Deploy** the container app with `MCP_TRANSPORT=sse` for HTTP access
+5. **Deploy** the container app with `MCP_TRANSPORT=streamable-http` for HTTP access
+
+For Copilot Studio MCP compatibility, this project now deploys with:
+- `MCP_TRANSPORT=streamable-http`
+- `MCP_JSON_RESPONSE=true`
+- `MCP_STATELESS_HTTP=true`
 
 ### What gets created
 
@@ -472,7 +477,9 @@ Authorization: Bearer eyJ...
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` (local) or `sse` (HTTP) |
+| `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` (local), `sse` (legacy HTTP), or `streamable-http` (recommended for Copilot Studio) |
+| `MCP_JSON_RESPONSE` | `true` | In `streamable-http` mode, return `application/json` responses instead of SSE-framed events |
+| `MCP_STATELESS_HTTP` | `false` | In `streamable-http` mode, allow requests like `tools/list` without an MCP session header |
 | `HOST` | `0.0.0.0` | Bind host (HTTP mode only) |
 | `PORT` | `8000` | Bind port (HTTP mode only) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | _(unset)_ | Enables Azure Monitor telemetry |

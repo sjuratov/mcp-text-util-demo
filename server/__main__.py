@@ -30,6 +30,18 @@ _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 # HOST and PORT are only used when MCP_TRANSPORT=sse (HTTP mode); ignored for stdio.
 _host = os.environ.get("HOST", "0.0.0.0")
 _port = int(os.environ.get("PORT", "8000"))
+_json_response = os.environ.get("MCP_JSON_RESPONSE", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+_stateless_http = os.environ.get("MCP_STATELESS_HTTP", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 mcp = FastMCP(
     "Text Utilities",
@@ -40,6 +52,10 @@ mcp = FastMCP(
     ),
     host=_host,
     port=_port,
+    # Streamable HTTP defaults to SSE-framed responses unless json_response is enabled.
+    # Copilot Studio MCP ingestion is more reliable with plain JSON responses.
+    json_response=_json_response,
+    stateless_http=_stateless_http,
 )
 
 # Register each skill function as an MCP tool (docstrings become tool descriptions)

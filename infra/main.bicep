@@ -89,7 +89,15 @@ module agent 'br/public:avm/ptn/azd/acr-container-app:0.2.0' = {
       }
       {
         name: 'MCP_TRANSPORT'
-        value: 'sse'
+        value: 'streamable-http'
+      }
+      {
+        name: 'MCP_JSON_RESPONSE'
+        value: 'true'
+      }
+      {
+        name: 'MCP_STATELESS_HTTP'
+        value: 'true'
       }
     ]
   }
