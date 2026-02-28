@@ -21,6 +21,9 @@ A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
   - [Run remotely in Azure (SSE) with EasyAuth](#run-remotely-in-azure-sse-with-easyauth)
     - [Test from local machine using curl (Azure EasyAuth)](#test-from-local-machine-using-curl-azure-easyauth)
     - [Test from local machine using MCP Inspector (Azure EasyAuth)](#test-from-local-machine-using-mcp-inspector-azure-easyauth)
+  - [Run remotely in Azure (SSE) with EasyAuth and behind APIM (using subscription key)](#run-remotely-in-azure-sse-with-easyauth-and-behind-apim-using-subscription-key)
+    - [Test from local machine using curl (Azure EasyAuth + APIM subscription key)](#test-from-local-machine-using-curl-azure-easyauth--apim-subscription-key)
+    - [Test from local machine using MCP Inspector (Azure EasyAuth + APIM subscription key)](#test-from-local-machine-using-mcp-inspector-azure-easyauth--apim-subscription-key)
   - [Configure MCP clients (Claude and VS Code)](#configure-mcp-clients-claude-and-vs-code)
     - [Local stdio configuration](#local-stdio-configuration)
     - [Remote Azure SSE configuration (EasyAuth)](#remote-azure-sse-configuration-easyauth)
@@ -274,6 +277,90 @@ Header value requirements:
 4. Leave `OAuth 2.0 Flow` fields empty (`Client ID`, `Scope`, etc.).
 
 5. Click **Connect**, then test `tools/list` and tool calls from the Inspector UI.
+
+## Run remotely in Azure (SSE) with EasyAuth and behind APIM (using subscription key)
+
+When APIM fronts your Container App, use the APIM endpoint instead of the direct Container App URL.
+
+Set these variables:
+
+```bash
+# Example: https://<apim-name>.azure-api.net/mcp-text-util-demo
+export APIM_MCP_BASE_URL="https://<apim-name>.azure-api.net/<mcp-api-suffix>"
+
+# APIM subscription key (APIM -> Subscriptions)
+export APIM_SUBSCRIPTION_KEY="<your-subscription-key>"
+
+# If your APIM API suffix maps to app root
+export APIM_SSE_URL="$APIM_MCP_BASE_URL"
+```
+
+### Test from local machine using curl (Azure EasyAuth + APIM subscription key)
+
+For secured APIM + EasyAuth, send both headers:
+- `Authorization: Bearer <token>`
+- `Ocp-Apim-Subscription-Key: <key>`
+
+1. Validate that keyless access is blocked (expected `401` or `403` when subscription is required):
+
+```bash
+curl -i -N \
+  -H "Authorization: Bearer $TOKEN" \
+  "$APIM_SSE_URL"
+```
+
+2. Connect with bearer token + subscription key:
+
+```bash
+curl -i -N \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Ocp-Apim-Subscription-Key: $APIM_SUBSCRIPTION_KEY" \
+  "$APIM_SSE_URL"
+```
+
+Expected success output starts with:
+
+```text
+HTTP/2 200
+event: endpoint
+data: /messages/?session_id=<id>
+```
+
+3. Use the returned `session_id` to call `tools/list` via APIM:
+
+```bash
+curl -X POST "$APIM_MCP_BASE_URL/messages/?session_id=<id>" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Ocp-Apim-Subscription-Key: $APIM_SUBSCRIPTION_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+### Test from local machine using MCP Inspector (Azure EasyAuth + APIM subscription key)
+
+1. Start Inspector:
+
+```bash
+mcp-inspector
+```
+
+2. In Inspector set:
+- `Transport Type`: `SSE`
+- `Connection Type`: `Via Proxy`
+- `URL`: `$APIM_SSE_URL`
+
+3. Under `Authentication` -> `Custom Headers`, add:
+
+```text
+Authorization: Bearer eyJ...
+Ocp-Apim-Subscription-Key: <your-subscription-key>
+```
+
+4. Click **Connect**, then run `tools/list` and invoke tools.
+
+Notes:
+- If APIM `Subscription required` is disabled, you can omit `Ocp-Apim-Subscription-Key`.
+- If you get `401/403`, verify the API is attached to the expected Product and the key belongs to a valid subscription scope.
 
 ## Configure MCP clients (Claude and VS Code)
 
