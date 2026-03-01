@@ -22,6 +22,7 @@ A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
     - [Test from local machine using curl (Azure EasyAuth)](#test-from-local-machine-using-curl-azure-easyauth)
     - [Test from local machine using MCP Inspector (Azure EasyAuth)](#test-from-local-machine-using-mcp-inspector-azure-easyauth)
   - [Run remotely in Azure (SSE) with EasyAuth and behind APIM (using subscription key)](#run-remotely-in-azure-sse-with-easyauth-and-behind-apim-using-subscription-key)
+    - [Deploy APIM MCP API (simple script)](#deploy-apim-mcp-api-simple-script)
     - [Test from local machine using curl (Azure EasyAuth + APIM subscription key)](#test-from-local-machine-using-curl-azure-easyauth--apim-subscription-key)
     - [Test from local machine using MCP Inspector (Azure EasyAuth + APIM subscription key)](#test-from-local-machine-using-mcp-inspector-azure-easyauth--apim-subscription-key)
   - [Configure MCP clients (Claude and VS Code)](#configure-mcp-clients-claude-and-vs-code)
@@ -196,7 +197,19 @@ curl -i -N "https://<your-container-app-domain>/sse"
 Acquire and export a token with device flow:
 
 ```bash
-AZD_ENV_FILE=".azure/mcp-text-util-demo/.env"
+ACTIVE_AZD_ENV="$(azd env get-value AZURE_ENV_NAME 2>/dev/null || true)"
+if [[ -n "$ACTIVE_AZD_ENV" && -f ".azure/$ACTIVE_AZD_ENV/.env" ]]; then
+  AZD_ENV_FILE=".azure/$ACTIVE_AZD_ENV/.env"
+else
+  AZD_ENV_FILE="$(ls -1 .azure/*/.env 2>/dev/null | head -n1)"
+fi
+
+if [[ -z "${AZD_ENV_FILE:-}" || ! -f "$AZD_ENV_FILE" ]]; then
+  echo "Could not locate an azd environment .env file." >&2
+  exit 1
+fi
+
+echo "Using azd env file: $AZD_ENV_FILE"
 set -a
 source "$AZD_ENV_FILE"
 set +a
@@ -444,7 +457,19 @@ Notes:
 To acquire a token for the EasyAuth-protected endpoint in this project, use the generated Entra client app and API scope (`access_as_user`):
 
 ```bash
-AZD_ENV_FILE=".azure/mcp-text-util-demo/.env"
+ACTIVE_AZD_ENV="$(azd env get-value AZURE_ENV_NAME 2>/dev/null || true)"
+if [[ -n "$ACTIVE_AZD_ENV" && -f ".azure/$ACTIVE_AZD_ENV/.env" ]]; then
+  AZD_ENV_FILE=".azure/$ACTIVE_AZD_ENV/.env"
+else
+  AZD_ENV_FILE="$(ls -1 .azure/*/.env 2>/dev/null | head -n1)"
+fi
+
+if [[ -z "${AZD_ENV_FILE:-}" || ! -f "$AZD_ENV_FILE" ]]; then
+  echo "Could not locate an azd environment .env file." >&2
+  exit 1
+fi
+
+echo "Using azd env file: $AZD_ENV_FILE"
 set -a
 source "$AZD_ENV_FILE"
 set +a
