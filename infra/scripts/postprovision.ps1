@@ -19,7 +19,7 @@ if (-not $scopeId) {
     $scopeId = [guid]::NewGuid().ToString()
 }
 az ad app update --id $apiAppId --identifier-uris "api://$apiAppId"
-$apiBody = "{`"api`":{`"requestedAccessTokenVersion`":2,`"oauth2PermissionScopes`":[{`"id`":`"$scopeId`",`"adminConsentDescription`":`"Access the MCP Text Utilities Server`",`"adminConsentDisplayName`":`"Access MCP Server`",`"userConsentDescription`":`"Allow this app to access the MCP Text Utilities Server on your behalf`",`"userConsentDisplayName`":`"Access MCP Server`",`"isEnabled`":true,`"type`":`"User`",`"value`":`"access_as_user`"}]}}"
+$apiBody = "{`"api`":{`"oauth2PermissionScopes`":[{`"id`":`"$scopeId`",`"adminConsentDescription`":`"Access the MCP Text Utilities Server`",`"adminConsentDisplayName`":`"Access MCP Server`",`"userConsentDescription`":`"Allow this app to access the MCP Text Utilities Server on your behalf`",`"userConsentDisplayName`":`"Access MCP Server`",`"isEnabled`":true,`"type`":`"User`",`"value`":`"access_as_user`"}]}}"
 az rest --method PATCH --url "https://graph.microsoft.com/v1.0/applications/$apiObjectId" --headers "Content-Type=application/json" --body $apiBody
 az ad sp create --id $apiAppId 2>$null
 
@@ -45,10 +45,10 @@ az containerapp auth microsoft update `
     --name $env:SERVICE_AGENT_NAME `
     --resource-group $rg `
     --client-id $apiAppId `
-    --issuer "https://login.microsoftonline.com/$tenantId/v2.0" `
+    --issuer "https://sts.windows.net/$tenantId/" `
     --allowed-audiences "$apiAppId"
 $authUrl = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$rg/providers/Microsoft.App/containerApps/$env:SERVICE_AGENT_NAME/authConfigs/current?api-version=2024-03-01"
-$authBody = "{`"properties`":{`"platform`":{`"enabled`":true},`"globalValidation`":{`"unauthenticatedClientAction`":`"Return401`"},`"identityProviders`":{`"azureActiveDirectory`":{`"isAutoProvisioned`":false,`"registration`":{`"clientId`":`"$apiAppId`",`"openIdIssuer`":`"https://login.microsoftonline.com/$tenantId/v2.0`"},`"validation`":{`"allowedAudiences`":[`"$apiAppId`",`"api://$apiAppId`"],`"defaultAuthorizationPolicy`":{`"allowedApplications`":[`"$clientAppId`"]}}}},`"login`":{`"preserveUrlFragmentsForLogins`":false},`"encryptionSettings`":{}}}"
+$authBody = "{`"properties`":{`"platform`":{`"enabled`":true},`"globalValidation`":{`"unauthenticatedClientAction`":`"Return401`"},`"identityProviders`":{`"azureActiveDirectory`":{`"isAutoProvisioned`":false,`"registration`":{`"clientId`":`"$apiAppId`",`"openIdIssuer`":`"https://sts.windows.net/$tenantId/`"},`"validation`":{`"allowedAudiences`":[`"$apiAppId`",`"api://$apiAppId`"],`"defaultAuthorizationPolicy`":{`"allowedApplications`":[`"$clientAppId`"]}}}},`"login`":{`"preserveUrlFragmentsForLogins`":false},`"encryptionSettings`":{}}}"
 az rest --method PUT --url $authUrl --headers "Content-Type=application/json" --body $authBody | Out-Null
 
 Write-Host "Building image in ACR: $env:AZURE_CONTAINER_REGISTRY_NAME/$imageName"

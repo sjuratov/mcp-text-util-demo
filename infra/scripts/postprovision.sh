@@ -23,7 +23,7 @@ az ad app update --id "${API_APP_ID}" --identifier-uris "api://${API_APP_ID}"
 az rest --method PATCH \
   --url "https://graph.microsoft.com/v1.0/applications/${API_OBJECT_ID}" \
   --headers "Content-Type=application/json" \
-  --body "{\"api\":{\"requestedAccessTokenVersion\":2,\"oauth2PermissionScopes\":[{\"id\":\"${SCOPE_ID}\",\"adminConsentDescription\":\"Access the MCP Text Utilities Server\",\"adminConsentDisplayName\":\"Access MCP Server\",\"userConsentDescription\":\"Allow this app to access the MCP Text Utilities Server on your behalf\",\"userConsentDisplayName\":\"Access MCP Server\",\"isEnabled\":true,\"type\":\"User\",\"value\":\"access_as_user\"}]}}"
+  --body "{\"api\":{\"oauth2PermissionScopes\":[{\"id\":\"${SCOPE_ID}\",\"adminConsentDescription\":\"Access the MCP Text Utilities Server\",\"adminConsentDisplayName\":\"Access MCP Server\",\"userConsentDescription\":\"Allow this app to access the MCP Text Utilities Server on your behalf\",\"userConsentDisplayName\":\"Access MCP Server\",\"isEnabled\":true,\"type\":\"User\",\"value\":\"access_as_user\"}]}}"
 az ad sp create --id "${API_APP_ID}" >/dev/null 2>&1 || true
 
 echo "Ensuring Entra client app registration: ${CLIENT_APP_NAME}"
@@ -59,11 +59,11 @@ az containerapp auth microsoft update \
   --name "${SERVICE_AGENT_NAME}" \
   --resource-group "${RG}" \
   --client-id "${API_APP_ID}" \
-  --issuer "https://login.microsoftonline.com/${TENANT_ID}/v2.0" \
+  --issuer "https://sts.windows.net/${TENANT_ID}/" \
   --allowed-audiences "${API_APP_ID}"
 AUTH_URL="https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.App/containerApps/${SERVICE_AGENT_NAME}/authConfigs/current?api-version=2024-03-01"
 AUTH_BODY=$(cat <<JSON
-{"properties":{"platform":{"enabled":true},"globalValidation":{"unauthenticatedClientAction":"Return401"},"identityProviders":{"azureActiveDirectory":{"isAutoProvisioned":false,"registration":{"clientId":"${API_APP_ID}","openIdIssuer":"https://login.microsoftonline.com/${TENANT_ID}/v2.0"},"validation":{"allowedAudiences":["${API_APP_ID}","api://${API_APP_ID}"],"defaultAuthorizationPolicy":{"allowedApplications":[${ALLOWED_APPS}]}}}},"login":{"preserveUrlFragmentsForLogins":false},"encryptionSettings":{}}}
+{"properties":{"platform":{"enabled":true},"globalValidation":{"unauthenticatedClientAction":"Return401"},"identityProviders":{"azureActiveDirectory":{"isAutoProvisioned":false,"registration":{"clientId":"${API_APP_ID}","openIdIssuer":"https://sts.windows.net/${TENANT_ID}/"},"validation":{"allowedAudiences":["${API_APP_ID}","api://${API_APP_ID}"],"defaultAuthorizationPolicy":{"allowedApplications":[${ALLOWED_APPS}]}}}},"login":{"preserveUrlFragmentsForLogins":false},"encryptionSettings":{}}}
 JSON
 )
 az rest --method PUT --url "${AUTH_URL}" --headers "Content-Type=application/json" --body "${AUTH_BODY}" >/dev/null

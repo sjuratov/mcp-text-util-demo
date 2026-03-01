@@ -4,6 +4,7 @@ set -euo pipefail
 # Usage:
 #   ./get-connector-oauth-values.sh \
 #     --connector-app-name "Text Utilities Copilot Connector" \
+#     [--connector-client-id "<existing-connector-app-client-id-guid>"] \
 #     [--env-file ".azure/<env>/.env"] \
 #     [--tenant-id "<tenant-guid>"] \
 #     [--api-app-client-id "<api-app-client-id-guid>"] \
@@ -15,6 +16,7 @@ set -euo pipefail
 # - If --redirect-uri is omitted, add it after first Save in connector UI.
 
 CONNECTOR_APP_NAME=""
+CONNECTOR_CLIENT_ID=""
 ENV_FILE=""
 TARGET_AZD_ENV=""
 TENANT_ID=""
@@ -25,6 +27,7 @@ SECRET_YEARS="2"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --connector-app-name) CONNECTOR_APP_NAME="$2"; shift 2 ;;
+    --connector-client-id) CONNECTOR_CLIENT_ID="$2"; shift 2 ;;
     --env-file) ENV_FILE="$2"; shift 2 ;;
     --tenant-id) TENANT_ID="$2"; shift 2 ;;
     --api-app-client-id) API_APP_CLIENT_ID="$2"; shift 2 ;;
@@ -91,7 +94,33 @@ az account show >/dev/null 2>&1 || {
   exit 1
 }
 
-CONNECTOR_CLIENT_ID="$(az ad app list --display-name "$CONNECTOR_APP_NAME" --query "[0].appId" -o tsv || true)"
+# Prefer an explicitly provided connector app id, then env-pinned value.
+if [[ -z "$CONNECTOR_CLIENT_ID" ]]; then
+  CONNECTOR_CLIENT_ID="${ENTRA_CONNECTOR_APP_CLIENT_ID:-}"
+fi
+
+# Verify explicit/env-provided connector app id exists.
+if [[ -n "$CONNECTOR_CLIENT_ID" ]]; then
+  if ! az ad app show --id "$CONNECTOR_CLIENT_ID" --query appId -o tsv >/dev/null 2>&1; then
+    echo "Warning: connector app id '$CONNECTOR_CLIENT_ID' was provided but not found. Falling back to discovery." >&2
+    CONNECTOR_CLIENT_ID=""
+  fi
+fi
+
+# Discovery fallback if app id is still unresolved.
+if [[ -z "$CONNECTOR_CLIENT_ID" ]]; then
+  # First prefer an app with this display name already referencing the target API app.
+  CONNECTOR_CLIENT_ID="$(az ad app list --display-name "$CONNECTOR_APP_NAME" --query "[?requiredResourceAccess[?resourceAppId=='$API_APP_CLIENT_ID']].appId | [0]" -o tsv || true)"
+
+  if [[ -z "$CONNECTOR_CLIENT_ID" ]]; then
+    MATCH_COUNT="$(az ad app list --display-name "$CONNECTOR_APP_NAME" --query "length(@)" -o tsv || true)"
+
+    # If exactly one app exists with this display name, reuse it.
+    if [[ "$MATCH_COUNT" == "1" ]]; then
+      CONNECTOR_CLIENT_ID="$(az ad app list --display-name "$CONNECTOR_APP_NAME" --query "[0].appId" -o tsv || true)"
+    fi
+  fi
+fi
 
 if [[ -z "$CONNECTOR_CLIENT_ID" ]]; then
   CONNECTOR_CLIENT_ID="$(az ad app create \
@@ -103,9 +132,9 @@ fi
 # Persist connector app ID in azd env so postprovision.sh includes it in EasyAuth.
 if command -v azd >/dev/null 2>&1; then
   if [[ -n "$TARGET_AZD_ENV" ]]; then
-    azd env set -e "$TARGET_AZD_ENV" ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID" 2>/dev/null || true
+    azd env set -e "$TARGET_AZD_ENV" ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID"
   else
-    azd env set ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID" 2>/dev/null || true
+    azd env set ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID"
   fi
 fi
 

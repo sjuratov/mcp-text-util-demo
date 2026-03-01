@@ -1,9 +1,9 @@
 <policies>
 	<inbound>
 		<base />
-		<!-- Validate OAuth2 JWT token -->
+		<!-- Validate OAuth2 JWT token (v1.0 tokens issued for this resource) -->
 		<validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
-			<openid-config url="https://login.microsoftonline.com/__TENANT_ID__/v2.0/.well-known/openid-configuration" />
+			<openid-config url="https://login.microsoftonline.com/__TENANT_ID__/.well-known/openid-configuration" />
 			<audiences>
 				<audience>api://__API_APP_CLIENT_ID__</audience>
 				<audience>__API_APP_CLIENT_ID__</audience>

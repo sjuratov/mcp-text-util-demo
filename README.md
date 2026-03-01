@@ -624,6 +624,18 @@ security:
 
 6. Delete any existing connections and create a new one (sign in when prompted).
 
+> **Troubleshooting: 403 Forbidden from EasyAuth**
+>
+> If the connector returns `403` with SubStatusCode `76`, the most common cause is a **v2.0 token / EasyAuth mismatch**. Container Apps EasyAuth (MISE) checks the `appid` claim for `allowedApplications`, but v2.0 tokens use `azp` instead (leaving `appid` empty). This project uses **v1.0 tokens** to avoid this issue.
+>
+> Verify with the http-auth container log — look for `appid: ;` (empty) in the JWT fields.
+>
+> Fix checklist:
+> 1. API app registration must **not** set `requestedAccessTokenVersion: 2` (leave it as `null` for v1.0)
+> 2. EasyAuth issuer must be `https://sts.windows.net/{tenant}/` (not the `/v2.0` variant)
+> 3. After fixing, **restart the Container App revision** to clear the MISE auth cache (`az containerapp revision restart ...`)
+> 4. Delete and recreate the connector connection in Copilot Studio to get a fresh token
+
 ## Tools
 
 | Tool | Description | Parameters |
