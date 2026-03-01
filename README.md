@@ -35,6 +35,7 @@ A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
     - [Step 4 — `command line` : Register the redirect URL](#step-4--command-line--register-the-redirect-url)
     - [Step 5 — `command line` : Update EasyAuth with the connector app](#step-5--command-line--update-easyauth-with-the-connector-app)
     - [Step 6 — `Copilot Studio` : Create connection and test](#step-6--copilot-studio--create-connection-and-test)
+    - [(Optional) Step 7 — `Power Platform` : Route Copilot Studio traffic through APIM](#optional-step-7--power-platform--route-copilot-studio-traffic-through-apim)
   - [Tools](#tools)
   - [Environment Variables](#environment-variables)
   - [Project Structure](#project-structure)
@@ -314,7 +315,7 @@ It auto-loads values from `.azure/<env>/.env` (including `AZURE_TENANT_ID`,
 `ENTRA_API_APP_CLIENT_ID`, and `SERVICE_AGENT_URI`).
 
 ```bash
-./apim/deploy-apim-mcp.sh \
+./apim-deployment/deploy-apim-mcp.sh \
   --apim-service-name <apim-name> \
   --resource-group <apim-resource-group>
 ```
@@ -623,6 +624,20 @@ This re-runs `postprovision.sh`, which reads `ENTRA_CONNECTOR_APP_CLIENT_ID` fro
 1. Go back to the Copilot Studio connector setup.
 2. Click the **Connect** button. A browser pop-up will appear asking you to sign in with your Entra account (your UPN). Sign in to authorize the connection.
 3. Test the agent — it should now be able to call the MCP server tools.
+
+---
+
+### (Optional) Step 7 — `Power Platform` : Route Copilot Studio traffic through APIM
+
+If you have deployed APIM in front of your MCP server (see [Run remotely behind APIM](#run-remotely-in-azure-sse-with-easyauth-and-behind-apim-using-subscription-key)), you can reconfigure the Power Platform custom connector so that Copilot Studio traffic flows through APIM instead of hitting the Container App directly.
+
+1. Open **Power Automate** → **Custom connectors** → select your connector (e.g. `mcp-text-utils-dev`).
+2. On the **1. General** tab, update:
+   - **Host** — set to your APIM gateway hostname, e.g. `apim-bc2yajbbxycfw.azure-api.net`
+   - **Base URL** — set to the APIM path for your MCP API, e.g. `/mcp-text-utils-dev`
+3. Click **Update connector** to save.
+4. Go to **Copilot Studio** → open your agent → **Tools** → select the MCP tool connection.
+5. Refresh the page — you should see the MCP tools listed and all traffic now routes through APIM.
 
 ---
 

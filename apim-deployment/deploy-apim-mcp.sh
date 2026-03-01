@@ -4,7 +4,7 @@ set -euo pipefail
 # Deploy APIM MCP API for an existing MCP backend.
 #
 # Usage:
-#   ./apim/deploy-apim-mcp.sh \
+#   ./apim-deployment/deploy-apim-mcp.sh \
 #     --apim-service-name <apim-name> \
 #     --resource-group <resource-group> \
 #     [--env-file .azure/<env>/.env] \
@@ -42,7 +42,7 @@ Optional:
   --deployment-name      ARM deployment name (default: mcp-apim).
 
 Example:
-  ./apim/deploy-apim-mcp.sh \
+  ./apim-deployment/deploy-apim-mcp.sh \
     --apim-service-name apim-demo \
     --resource-group rg-demo
 EOF
