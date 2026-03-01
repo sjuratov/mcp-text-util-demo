@@ -1,0 +1,30 @@
+<policies>
+	<inbound>
+		<base />
+		<!-- Validate OAuth2 JWT token -->
+		<validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
+			<openid-config url="https://login.microsoftonline.com/__TENANT_ID__/v2.0/.well-known/openid-configuration" />
+			<audiences>
+				<audience>api://__API_APP_CLIENT_ID__</audience>
+				<audience>__API_APP_CLIENT_ID__</audience>
+			</audiences>
+		</validate-jwt>
+		<!-- Read MCP JSON-RPC method without consuming the body -->
+		<set-variable name="rpcMethod" value="@(context.Request.Body?.As<JObject>(preserveContent: true)?[&quot;method&quot;]?.ToString() ?? string.Empty)" />
+		<!-- Throttle only actual tool execution calls -->
+		<choose>
+			<when condition="@(context.Variables.GetValueOrDefault<string>(&quot;rpcMethod&quot;) == &quot;tools/call&quot;)">
+				<rate-limit-by-key calls="2" renewal-period="60" counter-key="@(context.Subscription?.Id ?? context.Request.IpAddress)" />
+			</when>
+		</choose>
+	</inbound>
+	<backend>
+		<base />
+	</backend>
+	<outbound>
+		<base />
+	</outbound>
+	<on-error>
+		<base />
+	</on-error>
+</policies>

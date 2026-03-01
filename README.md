@@ -292,6 +292,26 @@ Header value requirements:
 
 When APIM fronts your Container App, use the APIM endpoint instead of the direct Container App URL.
 
+### Deploy APIM MCP API (simple script)
+
+Use the script below to deploy `apim/mcp-api.bicep` without running the notebook.
+It auto-loads values from `.azure/<env>/.env` (including `AZURE_TENANT_ID`,
+`ENTRA_API_APP_CLIENT_ID`, and `SERVICE_AGENT_URI`).
+
+```bash
+./apim/deploy-apim-mcp.sh \
+  --apim-service-name <apim-name> \
+  --resource-group <apim-resource-group>
+```
+
+Optional flags:
+- `--env-file .azure/<env>/.env`
+- `--mcp-backend-url https://<container-app-domain>/mcp`
+- `--mcp-path text-utils`
+- `--tenant-id <tenant-guid>`
+- `--api-app-client-id <api-app-client-id-guid>`
+- `--deployment-name mcp-apim`
+
 Set these variables:
 
 ```bash

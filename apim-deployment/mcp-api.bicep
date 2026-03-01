@@ -16,6 +16,15 @@ param mcpBackendUrl string
 @description('Path segment used in the APIM gateway URL, e.g. "text-utils" yields <gateway>/text-utils/mcp.')
 param mcpPath string = 'text-utils'
 
+@description('Microsoft Entra tenant ID used to build OpenID discovery URL in APIM policy.')
+param tenantId string
+
+@description('Client ID (application ID) of the Entra API app used as JWT audience in APIM policy.')
+param apiAppClientId string
+
+var policyTemplate = loadTextContent('policy.xml')
+var policyXml = replace(replace(policyTemplate, '__TENANT_ID__', tenantId), '__API_APP_CLIENT_ID__', apiAppClientId)
+
 resource apim 'Microsoft.ApiManagement/service@2024-06-01-preview' existing = {
   name: apimServiceName
 }
@@ -66,7 +75,7 @@ resource apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2021-12-01-pre
   parent: mcpApi
   name: 'policy'
   properties: {
-    value: loadTextContent('policy.xml')
+    value: policyXml
     format: 'rawxml'
   }
 }
