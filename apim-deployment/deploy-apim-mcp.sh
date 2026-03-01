@@ -34,7 +34,7 @@ Required:
   --resource-group       Resource group containing APIM.
 
 Optional:
-  --env-file             Path to .env (defaults to first .azure/*/.env).
+  --env-file             Path to .env (defaults to active azd env, else first .azure/*/.env).
   --mcp-backend-url      Full backend MCP URL (defaults to SERVICE_AGENT_URI + /mcp from env).
   --mcp-path             APIM path segment (default: text-utils).
   --tenant-id            Entra tenant ID (defaults to AZURE_TENANT_ID from env).
@@ -95,12 +95,27 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ENV_FILE" ]]; then
-  ENV_FILE="$(ls -1 "$REPO_ROOT"/.azure/*/.env 2>/dev/null | head -n1 || true)"
+  ACTIVE_AZD_ENV=""
+  if command -v azd >/dev/null 2>&1; then
+    ACTIVE_AZD_ENV="$(cd "$REPO_ROOT" && azd env get-value AZURE_ENV_NAME 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$ACTIVE_AZD_ENV" && -f "$REPO_ROOT/.azure/$ACTIVE_AZD_ENV/.env" ]]; then
+    ENV_FILE="$REPO_ROOT/.azure/$ACTIVE_AZD_ENV/.env"
+  else
+    ENV_FILE="$(ls -1 "$REPO_ROOT"/.azure/*/.env 2>/dev/null | head -n1 || true)"
+  fi
+fi
+
+if [[ -n "$ENV_FILE" && ! -f "$ENV_FILE" ]]; then
+  echo "Provided --env-file does not exist: $ENV_FILE" >&2
+  exit 1
 fi
 
 if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+  echo "Using env file: $ENV_FILE"
 fi
 
 TENANT_ID="${TENANT_ID:-${AZURE_TENANT_ID:-}}"

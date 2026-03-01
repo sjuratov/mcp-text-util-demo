@@ -16,6 +16,7 @@ set -euo pipefail
 
 CONNECTOR_APP_NAME=""
 ENV_FILE=""
+TARGET_AZD_ENV=""
 TENANT_ID=""
 API_APP_CLIENT_ID=""
 REDIRECT_URI=""
@@ -40,15 +41,35 @@ fi
 
 # Auto-discover azd env file if not explicitly provided.
 if [[ -z "$ENV_FILE" ]]; then
-  CANDIDATE="$(ls -1 .azure/*/.env 2>/dev/null | head -n1 || true)"
-  if [[ -n "$CANDIDATE" ]]; then
-    ENV_FILE="$CANDIDATE"
+  # Prefer the currently selected azd environment to avoid cross-env writes.
+  ACTIVE_ENV="$(azd env get-value AZURE_ENV_NAME 2>/dev/null || true)"
+  if [[ -n "$ACTIVE_ENV" && -f ".azure/$ACTIVE_ENV/.env" ]]; then
+    ENV_FILE=".azure/$ACTIVE_ENV/.env"
+  else
+    CANDIDATE="$(ls -1 .azure/*/.env 2>/dev/null | head -n1 || true)"
+    if [[ -n "$CANDIDATE" ]]; then
+      ENV_FILE="$CANDIDATE"
+    fi
   fi
 fi
 
 if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+fi
+
+# Resolve which azd environment should receive persisted values.
+# Priority:
+# 1) AZURE_ENV_NAME from selected --env-file (if present)
+# 2) currently selected azd environment
+# 3) path-derived name from --env-file: .azure/<env>/.env
+if [[ -n "${AZURE_ENV_NAME:-}" ]]; then
+  TARGET_AZD_ENV="$AZURE_ENV_NAME"
+else
+  TARGET_AZD_ENV="$(azd env get-value AZURE_ENV_NAME 2>/dev/null || true)"
+  if [[ -z "$TARGET_AZD_ENV" && -n "$ENV_FILE" ]]; then
+    TARGET_AZD_ENV="$(basename "$(dirname "$ENV_FILE")")"
+  fi
 fi
 
 TENANT_ID="${TENANT_ID:-${AZURE_TENANT_ID:-}}"
@@ -81,7 +102,11 @@ fi
 
 # Persist connector app ID in azd env so postprovision.sh includes it in EasyAuth.
 if command -v azd >/dev/null 2>&1; then
-  azd env set ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID" 2>/dev/null || true
+  if [[ -n "$TARGET_AZD_ENV" ]]; then
+    azd env set -e "$TARGET_AZD_ENV" ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID" 2>/dev/null || true
+  else
+    azd env set ENTRA_CONNECTOR_APP_CLIENT_ID "$CONNECTOR_CLIENT_ID" 2>/dev/null || true
+  fi
 fi
 
 if [[ -n "$REDIRECT_URI" ]]; then

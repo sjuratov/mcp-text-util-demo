@@ -527,10 +527,18 @@ azd up
 
 ### Step 2: Create connector app registration
 
+First ensure the intended azd environment is selected:
+
+```bash
+azd env select <your-env-name>
+```
+
 Run the helper script to create an Entra app registration for the connector and output all OAuth values:
 
 ```bash
-./get-connector-oauth-values.sh --connector-app-name "Text Utilities Copilot Connector"
+./get-connector-oauth-values.sh \
+  --connector-app-name "Text Utilities Copilot Connector" \
+  --env-file ".azure/<your-env-name>/.env"
 ```
 
 This will:
@@ -539,6 +547,12 @@ This will:
 - Create a client secret.
 - Save `ENTRA_CONNECTOR_APP_CLIENT_ID` to your azd environment.
 - Print all values needed for the connector form.
+
+Verification:
+
+```bash
+azd env get-value ENTRA_CONNECTOR_APP_CLIENT_ID
+```
 
 ### Step 3: Update EasyAuth to allow the connector app
 
