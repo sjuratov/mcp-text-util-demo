@@ -1,0 +1,37 @@
+<!--
+  APIM policy for the MCP Text Utilities API.
+
+  Dynamic values are injected at runtime via APIM Named Values:
+    {{mcp-tenant-id}}    – Azure AD tenant ID
+    {{mcp-app-id}}       – Entra API app registration client ID
+    {{mcp-backend-url}}  – Full URL of the deployed MCP Container App
+
+  These Named Values are created by apim-mcp.bicep.
+-->
+<policies>
+    <inbound>
+        <base />
+        <validate-jwt header-name="Authorization"
+                      failed-validation-httpcode="401"
+                      failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
+            <openid-config url="https://login.microsoftonline.com/{{mcp-tenant-id}}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>api://{{mcp-app-id}}</audience>
+            </audiences>
+            <issuers>
+                <issuer>https://sts.windows.net/{{mcp-tenant-id}}/</issuer>
+                <issuer>https://login.microsoftonline.com/{{mcp-tenant-id}}/v2.0</issuer>
+            </issuers>
+        </validate-jwt>
+        <set-backend-service base-url="{{mcp-backend-url}}" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
