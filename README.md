@@ -29,10 +29,12 @@ A lightweight [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) s
     - [Local stdio configuration](#local-stdio-configuration)
     - [Remote Azure SSE configuration (EasyAuth)](#remote-azure-sse-configuration-easyauth)
   - [Configure Copilot Studio connector](#configure-copilot-studio-connector)
-    - [Step 1: Deploy to Azure](#step-1-deploy-to-azure)
-    - [Step 2: Create connector app registration](#step-2-create-connector-app-registration)
-    - [Step 3: Update EasyAuth to allow the connector app](#step-3-update-easyauth-to-allow-the-connector-app)
-    - [Step 4: Configure the connector in Copilot Studio](#step-4-configure-the-connector-in-copilot-studio)
+    - [Step 1 — `command line` : Deploy to Azure](#step-1--command-line--deploy-to-azure)
+    - [Step 2 — `command line` : Create connector app registration](#step-2--command-line--create-connector-app-registration)
+    - [Step 3 — `Copilot Studio` : Add MCP tool and configure OAuth](#step-3--copilot-studio--add-mcp-tool-and-configure-oauth)
+    - [Step 4 — `command line` : Register the redirect URL](#step-4--command-line--register-the-redirect-url)
+    - [Step 5 — `command line` : Update EasyAuth with the connector app](#step-5--command-line--update-easyauth-with-the-connector-app)
+    - [Step 6 — `Copilot Studio` : Create connection and test](#step-6--copilot-studio--create-connection-and-test)
   - [Tools](#tools)
   - [Environment Variables](#environment-variables)
   - [Project Structure](#project-structure)
@@ -515,114 +517,114 @@ Authorization: Bearer eyJ...
 
 ## Configure Copilot Studio connector
 
-To use this MCP server from a Copilot Studio custom connector with OAuth (EasyAuth), follow these steps **in order**.
+To use this MCP server as a tool in Copilot Studio with OAuth (EasyAuth), follow these steps **exactly in order**. Each step indicates where it happens: **command line** or **Copilot Studio**.
 
-### Step 1: Deploy to Azure
+---
 
-Run `azd up` to provision all resources and configure EasyAuth:
+### Step 1 — `command line` : Deploy to Azure
 
 ```bash
 azd up
 ```
 
-### Step 2: Create connector app registration
+This provisions all Azure resources, creates Entra app registrations, configures EasyAuth, builds the container image, and deploys the MCP server.
 
-First ensure the intended azd environment is selected:
+---
+
+### Step 2 — `command line` : Create connector app registration
+
+Run this immediately after `azd up` completes. First ensure the correct azd environment is selected:
 
 ```bash
 azd env select <your-env-name>
 ```
 
-Run the helper script to create an Entra app registration for the connector and output all OAuth values:
+Then run the helper script:
 
 ```bash
 ./get-connector-oauth-values.sh \
-  --connector-app-name "Text Utilities Copilot Connector" \
-  --env-file ".azure/<your-env-name>/.env"
+  --connector-app-name "<your-connector-name>"
 ```
 
-This will:
+The script will:
 - Create (or reuse) an Entra app registration for the connector.
 - Add the delegated `access_as_user` permission and grant admin consent.
 - Create a client secret.
 - Save `ENTRA_CONNECTOR_APP_CLIENT_ID` to your azd environment.
-- Print all values needed for the connector form.
+- **Print all OAuth values** — keep this output visible, you'll need it in the next step.
 
-Verification:
+The output looks like:
 
-```bash
-azd env get-value ENTRA_CONNECTOR_APP_CLIENT_ID
+```text
+Client ID:         <guid>
+Client secret:     <secret>
+Authorization URL: https://login.microsoftonline.com/<tenant>/oauth2/v2.0/authorize
+Token URL:         https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token
+Refresh URL:       https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token
+Scope:             api://<api-app-id>/access_as_user
 ```
 
-### Step 3: Update EasyAuth to allow the connector app
+---
 
-EasyAuth restricts which client applications can obtain tokens. After creating the connector app, re-run provisioning so `postprovision.sh` picks up the new connector app ID:
+### Step 3 — `Copilot Studio` : Add MCP tool and configure OAuth
+
+1. In Copilot Studio, go to your agent → **Tools** → **Add a tool** → **MCP Server**.
+2. Set the **Server URL** to your Container App MCP endpoint:
+
+   ```
+   https://<your-container-app-domain>/mcp
+   ```
+
+3. Select **OAuth 2.0 Manual** as the authentication method.
+4. Copilot Studio creates a custom connector. On the connector **Security** page, enter the values from Step 2:
+   - **Client ID**: from script output
+   - **Client secret**: from script output
+   - **Authorization URL**: from script output
+   - **Token URL**: from script output
+   - **Refresh URL**: from script output
+   - **Scope**: from script output
+5. Click **Update connector**.
+6. The connector generates a **Redirect URL**. **Copy it.**
+
+> **STOP HERE** — do **not** proceed with the Copilot Studio connection setup yet. Go back to the command line first.
+
+---
+
+### Step 4 — `command line` : Register the redirect URL
+
+Rerun the helper script with the redirect URL you just copied:
+
+```bash
+./get-connector-oauth-values.sh \
+  --connector-app-name "<your-connector-name>" \
+  --redirect-uri "<paste-redirect-url-here>"
+```
+
+This registers the redirect URL on the Entra app registration.
+
+---
+
+### Step 5 — `command line` : Update EasyAuth with the connector app
+
+Run `azd up` again immediately after the helper script:
 
 ```bash
 azd up
 ```
 
-> **Why a second `azd up`?** The connector app doesn't exist during the first deploy. The `postprovision.sh` script reads `ENTRA_CONNECTOR_APP_CLIENT_ID` from the azd environment and adds it to the EasyAuth `allowedApplications` list. Without this step, EasyAuth returns `403` to tokens issued to the connector app.
+This re-runs `postprovision.sh`, which reads `ENTRA_CONNECTOR_APP_CLIENT_ID` from the azd environment and adds it to the EasyAuth `allowedApplications` list.
 
-### Step 4: Configure the connector in Copilot Studio
+> **Why another `azd up`?** The connector app didn't exist during the first deploy. Without this step, EasyAuth returns `403` to tokens issued for the connector app.
 
-1. In your Copilot Studio custom connector, import this Swagger (update `host` if using APIM):
+---
 
-```yaml
-swagger: '2.0'
-info:
-  title: Text-Utils
-  description: Various text utils - Base64 encode/decode
-  version: 1.0.0
-host: <your-container-app-domain>
-basePath: /
-schemes:
-  - https
-paths:
-  /mcp:
-    post:
-      operationId: InvokeServer
-      summary: Text-Utils
-      description: Various text utils - Base64 encode/decode
-      x-ms-agentic-protocol: mcp-streamable-1.0
-      responses:
-        '200':
-          description: Immediate Response
-      security:
-        - oauth2-auth:
-            - api://<ENTRA_API_APP_CLIENT_ID>/access_as_user
-securityDefinitions:
-  oauth2-auth:
-    type: oauth2
-    flow: accessCode
-    authorizationUrl: https://login.microsoftonline.com/<AZURE_TENANT_ID>/oauth2/v2.0/authorize
-    tokenUrl: https://login.microsoftonline.com/<AZURE_TENANT_ID>/oauth2/v2.0/token
-    scopes:
-      api://<ENTRA_API_APP_CLIENT_ID>/access_as_user: Access Text Utils API
-security:
-  - oauth2-auth:
-      - api://<ENTRA_API_APP_CLIENT_ID>/access_as_user
-```
+### Step 6 — `Copilot Studio` : Create connection and test
 
-2. In the connector **Security** page, set:
-   - **Client ID**: from script output
-   - **Client secret**: from script output
-   - **Resource URL**: `api://<ENTRA_API_APP_CLIENT_ID>`
-   - **Tenant ID**: your tenant GUID (not `common`)
+1. Go back to the Copilot Studio connector setup.
+2. Click the **Connect** button. A browser pop-up will appear asking you to sign in with your Entra account (your UPN). Sign in to authorize the connection.
+3. Test the agent — it should now be able to call the MCP server tools.
 
-3. Click **Update connector**.
-
-4. The connector generates a **Redirect URL**. Copy it and rerun the script to register it:
-
-```bash
-./get-connector-oauth-values.sh \
-  --connector-app-name "Text Utilities Copilot Connector" \
-  --redirect-uri "<paste-redirect-url-here>"
-```
-
-5. Update the **Client secret** in the connector with the newly printed value, then click **Update connector** again.
-
-6. Delete any existing connections and create a new one (sign in when prompted).
+---
 
 > **Troubleshooting: 403 Forbidden from EasyAuth**
 >
@@ -634,7 +636,7 @@ security:
 > 1. API app registration must **not** set `requestedAccessTokenVersion: 2` (leave it as `null` for v1.0)
 > 2. EasyAuth issuer must be `https://sts.windows.net/{tenant}/` (not the `/v2.0` variant)
 > 3. After fixing, **restart the Container App revision** to clear the MISE auth cache (`az containerapp revision restart ...`)
-> 4. Delete and recreate the connector connection in Copilot Studio to get a fresh token
+> 4. Delete and recreate the connection in Copilot Studio to get a fresh token
 
 ## Tools
 
